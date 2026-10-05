@@ -1,0 +1,21 @@
+# Secrets: NEVER include them in the image
+.env
+*.env
+secrets/
+*firebase-adminsdk*.json
+serviceAccountKey*.json
+
+# Build output and IDE / VCS files
+target/
+.git/
+.idea/
+.vscode/
+*.iml
+
+# Not needed for the build
+docs/
+README.md
+HELP.md
+docker-compose.yml
+Dockerfile
+.dockerignore
