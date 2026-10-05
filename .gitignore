@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Secrets (khong commit) ###
+.env
+*.env
+secrets/
+*firebase-adminsdk*.json
+serviceAccountKey*.json
