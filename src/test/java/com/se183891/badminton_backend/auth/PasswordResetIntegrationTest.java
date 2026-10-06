@@ -5,6 +5,7 @@ import com.se183891.badminton_backend.auth.entity.OtpPurpose;
 import com.se183891.badminton_backend.auth.repository.EmailOtpRepository;
 import com.se183891.badminton_backend.auth.repository.RefreshTokenRepository;
 import com.se183891.badminton_backend.auth.service.OtpMailSender;
+import com.se183891.badminton_backend.common.exception.ApiException;
 import com.se183891.badminton_backend.user.entity.AuthProvider;
 import com.se183891.badminton_backend.user.entity.Role;
 import com.se183891.badminton_backend.user.entity.User;
@@ -35,8 +36,12 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -59,6 +64,9 @@ class PasswordResetIntegrationTest {
     private static final String NEW_PASSWORD = "NewPass456";
     private static final String GENERIC_SENT = "Nếu email đã đăng ký, mã OTP đặt lại mật khẩu đã được gửi tới email đó";
     private static final String GENERIC_INVALID = "Mã OTP không đúng hoặc đã hết hạn";
+    /** Mail quen mat khau gui bat dong bo: thoi gian cho toi da / thoi gian cho de chac khong co them mail. */
+    private static final long ASYNC_TIMEOUT_MS = 5_000;
+    private static final long ASYNC_SETTLE_MS = 300;
 
     @Autowired
     private MockMvc mvc;
@@ -114,7 +122,7 @@ class PasswordResetIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(objectMapper.readTree(unknown)).isEqualTo(objectMapper.readTree(known));
-        verify(otpMailSender, never()).sendPasswordResetOtp(eq("nobody@example.com"), anyString(), any());
+        verify(otpMailSender, after(ASYNC_SETTLE_MS).never()).sendPasswordResetOtp(eq("nobody@example.com"), anyString(), any());
         assertThat(emailOtpRepository.findAll()).extracting(EmailOtp::getEmail).containsOnly("known@example.com");
     }
 
@@ -132,7 +140,7 @@ class PasswordResetIntegrationTest {
         forgot("google@example.com")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message", is(GENERIC_SENT)));
-        verify(otpMailSender, never()).sendPasswordResetOtp(anyString(), anyString(), any());
+        verify(otpMailSender, after(ASYNC_SETTLE_MS).never()).sendPasswordResetOtp(anyString(), anyString(), any());
         assertThat(emailOtpRepository.count()).isZero();
     }
 
@@ -145,7 +153,10 @@ class PasswordResetIntegrationTest {
         JsonNode second = body(forgot("fast@example.com").andExpect(status().isOk()));
 
         assertThat(second).isEqualTo(first);
-        verify(otpMailSender, times(1)).sendPasswordResetOtp(eq("fast@example.com"), anyString(), any());
+        verify(otpMailSender, timeout(ASYNC_TIMEOUT_MS).times(1))
+                .sendPasswordResetOtp(eq("fast@example.com"), anyString(), any());
+        verify(otpMailSender, after(ASYNC_SETTLE_MS).times(1))
+                .sendPasswordResetOtp(eq("fast@example.com"), anyString(), any());
         assertThat(emailOtpRepository.count()).isEqualTo(1);
     }
 
@@ -162,9 +173,42 @@ class PasswordResetIntegrationTest {
         }
 
         // Toi da 5 lan gui/gio: lan thu 6 bi chan that (khong mail, khong ban ghi), chi la khong bao loi
-        verify(otpMailSender, times(5)).sendPasswordResetOtp(eq("limit@example.com"), anyString(), any());
-        verify(otpMailSender, never()).sendPasswordResetOtp(eq("nobody@example.com"), anyString(), any());
+        verify(otpMailSender, timeout(ASYNC_TIMEOUT_MS).times(5))
+                .sendPasswordResetOtp(eq("limit@example.com"), anyString(), any());
+        verify(otpMailSender, after(ASYNC_SETTLE_MS).times(5))
+                .sendPasswordResetOtp(eq("limit@example.com"), anyString(), any());
+        verify(otpMailSender, after(ASYNC_SETTLE_MS).never()).sendPasswordResetOtp(eq("nobody@example.com"), anyString(), any());
         assertThat(emailOtpRepository.count()).isEqualTo(5);
+    }
+
+    @Test
+    void forgotMailFailureIsOnlyLoggedAndResponseIsUnchanged() throws Exception {
+        saveLocalUser("smtpfail@example.com", OLD_PASSWORD, Role.CUSTOMER);
+        doThrow(ApiException.serviceUnavailable("Không gửi được email, vui lòng thử lại sau"))
+                .when(otpMailSender).sendPasswordResetOtp(anyString(), anyString(), any(Duration.class));
+
+        JsonNode unknown = body(forgot("nobody@example.com").andExpect(status().isOk()));
+        assertThat(body(forgot("smtpfail@example.com").andExpect(status().isOk()))).isEqualTo(unknown);
+
+        verify(otpMailSender, timeout(ASYNC_TIMEOUT_MS)).sendPasswordResetOtp(eq("smtpfail@example.com"), anyString(), any());
+        // Ma da commit truoc khi gui mail (va gui that bai khong rollback ma)
+        assertThat(emailOtpRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void forgotDoesNotWaitForSlowSmtp() throws Exception {
+        saveLocalUser("slow@example.com", OLD_PASSWORD, Role.CUSTOMER);
+        doAnswer(invocation -> {
+            Thread.sleep(1_500);
+            return null;
+        }).when(otpMailSender).sendPasswordResetOtp(anyString(), anyString(), any(Duration.class));
+
+        long start = System.nanoTime();
+        forgot("slow@example.com").andExpect(status().isOk());
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        assertThat(elapsedMs).isLessThan(1_000);
+        verify(otpMailSender, timeout(ASYNC_TIMEOUT_MS)).sendPasswordResetOtp(eq("slow@example.com"), anyString(), any());
     }
 
     // ---------- reset ----------
@@ -334,7 +378,8 @@ class PasswordResetIntegrationTest {
     /** Ma dat lai mat khau gan nhat da "gui" toi email (lay tu mock OtpMailSender). */
     private String lastResetOtp(String email) {
         ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
-        verify(otpMailSender, atLeastOnce()).sendPasswordResetOtp(eq(email), code.capture(), any(Duration.class));
+        verify(otpMailSender, timeout(ASYNC_TIMEOUT_MS).atLeastOnce())
+                .sendPasswordResetOtp(eq(email), code.capture(), any(Duration.class));
         return code.getValue();
     }
 

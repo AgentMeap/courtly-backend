@@ -35,6 +35,7 @@ public class OtpService {
     private final EmailOtpRepository otpRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpMailSender mailSender;
+    private final AsyncOtpMailer asyncMailer;
     private final OtpProperties properties;
 
     /**
@@ -57,8 +58,10 @@ public class OtpService {
      * Nhu {@link #send} nhung KHONG bao loi khi bi gioi han tan suat: chi im lang bo qua (khong tao ma,
      * khong gui mail). Dung cho luong khong duoc tiet lo email co ton tai hay khong (quen mat khau).
      * Gioi han van co hieu luc that, nen khong the dung endpoint de spam hop thu nguoi khac.
+     * Mail duoc gui BAT DONG BO sau khi ma da commit: response khong phai cho SMTP, va loi gui mail
+     * chi duoc log (ma van ton tai, nguoi dung yeu cau ma moi sau cooldown).
      *
-     * @return true neu da tao ma va gui mail, false neu bi gioi han
+     * @return true neu da tao ma va len lich gui mail, false neu bi gioi han
      */
     @Transactional
     public boolean sendIfAllowed(String email, OtpPurpose purpose) {
@@ -67,7 +70,7 @@ public class OtpService {
             return false;
         }
         String code = createOtp(email, purpose, now);
-        deliver(email, purpose, code);
+        asyncMailer.sendAfterCommit(email, purpose, code, properties.ttl());
         return true;
     }
 
