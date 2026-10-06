@@ -54,7 +54,10 @@ public class AuthController {
     }
 
     @PostMapping("/password/forgot")
-    @Operation(summary = "Quen mat khau buoc 1: gui OTP neu email da dang ky (luon tra 200, khong lo email)")
+    @Operation(summary = "Quen mat khau buoc 1: gui OTP neu email da dang ky",
+            description = "Luon tra 200 voi cung mot body, ke ca khi email khong ton tai hoac bi gioi han tan suat "
+                    + "(cooldown, so lan gui/gio): khi do chi im lang khong gui mail. Endpoint nay KHONG tra 429. "
+                    + "503 neu he thong chua cau hinh SMTP.")
     public OtpSentResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         return authService.forgotPassword(request);
     }

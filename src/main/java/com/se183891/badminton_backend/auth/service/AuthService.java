@@ -122,14 +122,15 @@ public class AuthService {
 
     /**
      * Quen mat khau, buoc 1: luon tra cung mot phan hoi, khong tiet lo email co ton tai hay khong.
-     * Chi thuc su tao + gui OTP khi email thuoc tai khoan dat lai mat khau duoc (LOCAL, enabled, co mat khau).
+     * Chi thuc su tao + gui OTP khi email thuoc tai khoan dat lai mat khau duoc (LOCAL, enabled, co mat khau)
+     * va chua bi gioi han tan suat. Bi gioi han thi im lang bo qua (khong 429), vi 429 chi xay ra voi email that.
      */
     public OtpSentResponse forgotPassword(ForgotPasswordRequest request) {
         // Kiem tra cau hinh mail cho MOI email, de loi 503 khong phan biet email co that hay khong
         otpMailSender.ensureConfigured();
         String email = normalizeEmail(request.email());
         if (findResettableUser(email).isPresent()) {
-            otpService.send(email, OtpPurpose.RESET_PASSWORD);
+            otpService.sendIfAllowed(email, OtpPurpose.RESET_PASSWORD);
         }
         return otpService.sentResponse(ErrorMessages.PASSWORD_RESET_OTP_SENT);
     }

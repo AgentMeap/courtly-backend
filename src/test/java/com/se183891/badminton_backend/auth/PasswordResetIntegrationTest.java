@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,7 +31,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -72,6 +72,8 @@ class PasswordResetIntegrationTest {
     private EmailOtpRepository emailOtpRepository;
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     // Khong gui email that; lay ma OTP tu tham so truyen vao mock
     @MockitoBean
@@ -135,14 +137,34 @@ class PasswordResetIntegrationTest {
     }
 
     @Test
-    void forgotResendTooFastReturns429() throws Exception {
+    void forgotResendTooFastIsSilentlyThrottled() throws Exception {
         saveLocalUser("fast@example.com", OLD_PASSWORD, Role.CUSTOMER);
 
-        forgot("fast@example.com").andExpect(status().isOk());
-        forgot("fast@example.com")
-                .andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$.message", containsString("giây")));
+        JsonNode first = body(forgot("fast@example.com").andExpect(status().isOk()));
+        // Lan 2 trong cooldown: van 200, body giong het, nhung khong tao ma moi va khong gui mail
+        JsonNode second = body(forgot("fast@example.com").andExpect(status().isOk()));
+
+        assertThat(second).isEqualTo(first);
         verify(otpMailSender, times(1)).sendPasswordResetOtp(eq("fast@example.com"), anyString(), any());
+        assertThat(emailOtpRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void forgotOverHourlyLimitLooksIdenticalForRealAndUnknownEmail() throws Exception {
+        saveLocalUser("limit@example.com", OLD_PASSWORD, Role.CUSTOMER);
+        JsonNode expected = body(forgot("nobody@example.com").andExpect(status().isOk()));
+
+        for (int i = 0; i < 6; i++) {
+            assertThat(body(forgot("limit@example.com").andExpect(status().isOk()))).isEqualTo(expected);
+            assertThat(body(forgot("nobody@example.com").andExpect(status().isOk()))).isEqualTo(expected);
+            // Dua cac ma da gui lui 61 giay de qua cooldown (60s) nhung van trong cua so 1 gio
+            jdbcTemplate.update("UPDATE email_otps SET created_at = DATEADD(second, -61, created_at)");
+        }
+
+        // Toi da 5 lan gui/gio: lan thu 6 bi chan that (khong mail, khong ban ghi), chi la khong bao loi
+        verify(otpMailSender, times(5)).sendPasswordResetOtp(eq("limit@example.com"), anyString(), any());
+        verify(otpMailSender, never()).sendPasswordResetOtp(eq("nobody@example.com"), anyString(), any());
+        assertThat(emailOtpRepository.count()).isEqualTo(5);
     }
 
     // ---------- reset ----------
