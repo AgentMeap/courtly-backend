@@ -83,6 +83,12 @@ public class RefreshTokenService {
                 .ifPresent(token -> refreshTokenRepository.revokeIfActive(token.getId(), null));
     }
 
+    /** Thu hoi moi refresh token con hieu luc cua user (vd: sau khi dat lai mat khau). */
+    @Transactional
+    public int revokeAll(User user) {
+        return refreshTokenRepository.revokeAllByUserId(user.getId());
+    }
+
     private void revokeAllForReuse(User user) {
         int revoked = refreshTokenRepository.revokeAllByUserId(user.getId());
         log.warn("Refresh token reuse detected for user {} - revoked {} active token(s)", user.getId(), revoked);

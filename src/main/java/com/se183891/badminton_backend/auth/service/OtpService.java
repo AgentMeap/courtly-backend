@@ -68,10 +68,17 @@ public class OtpService {
         otp.setConsumed(false);
         otpRepository.saveAndFlush(otp);
 
-        mailSender.sendRegistrationOtp(email, code, properties.ttl());
+        switch (purpose) {
+            case REGISTER -> mailSender.sendRegistrationOtp(email, code, properties.ttl());
+            case RESET_PASSWORD -> mailSender.sendPasswordResetOtp(email, code, properties.ttl());
+        }
 
-        return new OtpSentResponse(ErrorMessages.OTP_SENT.formatted(email),
-                properties.ttl().toSeconds(), properties.resendCooldown().toSeconds());
+        return sentResponse(ErrorMessages.OTP_SENT.formatted(email));
+    }
+
+    /** Phan hoi "da gui ma" voi thoi han / thoi gian cho theo cau hinh. */
+    public OtpSentResponse sentResponse(String message) {
+        return new OtpSentResponse(message, properties.ttl().toSeconds(), properties.resendCooldown().toSeconds());
     }
 
     /**

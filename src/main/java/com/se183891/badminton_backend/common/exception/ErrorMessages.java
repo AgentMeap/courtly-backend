@@ -32,6 +32,11 @@ public final class ErrorMessages {
     public static final String OTP_TOO_MANY_ATTEMPTS = "Bạn đã nhập sai quá nhiều lần, vui lòng yêu cầu mã mới";
     public static final String OTP_RESEND_WAIT = "Vui lòng đợi %d giây trước khi yêu cầu mã mới";
     public static final String OTP_TOO_MANY_SENDS = "Bạn đã yêu cầu quá nhiều mã OTP, vui lòng thử lại sau 1 giờ";
+    // Quen mat khau: thong bao chung, khong tiet lo email co ton tai hay khong
+    public static final String PASSWORD_RESET_OTP_SENT =
+            "Nếu email đã đăng ký, mã OTP đặt lại mật khẩu đã được gửi tới email đó";
+    public static final String PASSWORD_RESET_OTP_INVALID = "Mã OTP không đúng hoặc đã hết hạn";
+    public static final String PASSWORD_RESET_SUCCESS = "Đặt lại mật khẩu thành công";
     public static final String MAIL_DISABLED = "Chức năng gửi email chưa được cấu hình";
     public static final String MAIL_SEND_FAILED = "Không gửi được email, vui lòng thử lại sau";
     public static final String INTERNAL_ERROR = "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau";

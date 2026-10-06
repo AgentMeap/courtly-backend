@@ -1,14 +1,17 @@
 package com.se183891.badminton_backend.auth.controller;
 
 import com.se183891.badminton_backend.auth.dto.AuthResponse;
+import com.se183891.badminton_backend.auth.dto.ForgotPasswordRequest;
 import com.se183891.badminton_backend.auth.dto.GoogleLoginRequest;
 import com.se183891.badminton_backend.auth.dto.LoginRequest;
 import com.se183891.badminton_backend.auth.dto.OtpSentResponse;
 import com.se183891.badminton_backend.auth.dto.RefreshTokenRequest;
 import com.se183891.badminton_backend.auth.dto.RegisterRequest;
+import com.se183891.badminton_backend.auth.dto.ResetPasswordRequest;
 import com.se183891.badminton_backend.auth.dto.SendOtpRequest;
 import com.se183891.badminton_backend.auth.service.AuthService;
 import com.se183891.badminton_backend.auth.service.GoogleAuthService;
+import com.se183891.badminton_backend.common.response.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Dang ky, dang nhap, refresh, dang xuat")
+@Tag(name = "Auth", description = "Dang ky, dang nhap, quen mat khau, refresh, dang xuat")
 @SecurityRequirements // cac endpoint nay khong can Bearer token
 public class AuthController {
 
@@ -48,6 +51,18 @@ public class AuthController {
     @Operation(summary = "Dang nhap bang email hoac so dien thoai")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/password/forgot")
+    @Operation(summary = "Quen mat khau buoc 1: gui OTP neu email da dang ky (luon tra 200, khong lo email)")
+    public OtpSentResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return authService.forgotPassword(request);
+    }
+
+    @PostMapping("/password/reset")
+    @Operation(summary = "Quen mat khau buoc 2: dat mat khau moi bang OTP, thu hoi moi phien dang nhap")
+    public MessageResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return authService.resetPassword(request);
     }
 
     @PostMapping("/google")
