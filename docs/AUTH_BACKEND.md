@@ -83,7 +83,7 @@ $env:DB_PASSWORD = "<mat khau sa>"
 | POST | `/api/auth/register/send-otp` | không | 200 `{ message, expiresIn, resendAfter }` (giây). 409 nếu email đã dùng, 429 nếu gửi quá nhanh hoặc quá nhiều, 503 nếu chưa cấu hình mail hoặc gửi lỗi |
 | POST | `/api/auth/register` | không | 201 AuthResponse. Body `{ fullName, email, phone?, password, otp }`. 400 nếu OTP sai hoặc hết hạn |
 | POST | `/api/auth/login` | không | 200 AuthResponse (`identifier` = email hoặc SĐT) |
-| POST | `/api/auth/password/forgot` | không | 200 `{ message, expiresIn, resendAfter }` **luôn giống nhau** dù email có tồn tại hay không. Body `{ email }`. 429 nếu gửi quá nhanh hoặc quá nhiều, 503 nếu chưa cấu hình mail |
+| POST | `/api/auth/password/forgot` | không | **Luôn** 200 `{ message, expiresIn, resendAfter }` với body giống hệt nhau, dù email có tồn tại hay không và **kể cả khi bị giới hạn tần suất** (endpoint này không trả 429). Body `{ email }`. 503 nếu hệ thống chưa cấu hình mail |
 | POST | `/api/auth/password/reset` | không | 200 `{ "message": "Đặt lại mật khẩu thành công" }`. Body `{ email, otp, newPassword }`. 400 với một thông báo chung nếu mã sai, hết hạn hoặc email không hợp lệ; 400 + `fieldErrors.newPassword` nếu mật khẩu yếu |
 | POST | `/api/auth/google` | không | 200 AuthResponse / 401 token sai / 409 (mock) email thuộc tài khoản khác / 503 khi Google đang tắt |
 | POST | `/api/auth/refresh` | không | 200 AuthResponse (refresh token cũ bị thu hồi) |
@@ -115,13 +115,15 @@ Quy tắc:
 Quy tắc:
 
 - Mã chỉ thực sự được tạo và gửi khi email thuộc tài khoản **LOCAL, đang hoạt động và có mật khẩu**. Email không tồn tại hoặc tài khoản chỉ dùng Google thì không gửi gì và không tạo bản ghi, nhưng phản hồi vẫn y hệt.
-- Thời hạn mã, thời gian chờ gửi lại, số lần gửi mỗi giờ và giới hạn **5 lần nhập sai** giống hệt OTP đăng ký (bảng `email_otps`, `purpose = RESET_PASSWORD`). Mã đăng ký không dùng được để đặt lại mật khẩu và ngược lại.
+- Thời hạn mã, thời gian chờ gửi lại (60 giây), số lần gửi mỗi giờ (5 lần) và giới hạn **5 lần nhập sai** giống hệt OTP đăng ký (bảng `email_otps`, `purpose = RESET_PASSWORD`). Mã đăng ký không dùng được để đặt lại mật khẩu và ngược lại.
+- **Giới hạn tần suất được áp dụng im lặng**: gọi lại trong thời gian chờ hoặc vượt 5 lần/giờ thì backend **không tạo mã, không gửi mail** nhưng vẫn trả 200 với đúng body như khi gửi thành công. Nhờ vậy không ai dò được email có thật qua lỗi 429, mà giới hạn vẫn chặn được việc spam hộp thư người khác. `expiresIn` và `resendAfter` luôn là giá trị cấu hình (TTL, cooldown), không phải thời gian còn lại của mã cũ.
+- Mail đặt lại mật khẩu được gửi **bất đồng bộ** sau khi mã đã được lưu (commit), nên response trả về ngay ở mọi nhánh và thời gian phản hồi không tiết lộ email có thật. Nếu gửi mail thất bại, backend chỉ ghi log (không ghi mã OTP, email bị che bớt); người dùng có thể yêu cầu mã mới sau thời gian chờ.
 - Mật khẩu mới theo **đúng quy tắc đăng ký**: 8 đến 72 ký tự, có ít nhất 1 chữ hoa và 1 chữ số, không có khoảng trắng đầu/cuối, tối đa 72 byte (BCrypt). Nếu mật khẩu không hợp lệ thì mã OTP **không bị tính lượt**.
 - Mọi lỗi về mã (sai, hết hạn, đã dùng, hết lượt) và email không hợp lệ đều trả **cùng một lỗi** 400 *"Mã OTP không đúng hoặc đã hết hạn"*. Vì vậy app không hiển thị được số lượt còn lại; sau vài lần sai hãy gợi ý người dùng gửi lại mã.
 - Khi đặt lại thành công, trong **một transaction**: mã bị đánh dấu đã dùng, `password_hash` và `updated_at` được cập nhật, và **toàn bộ refresh token** của user bị thu hồi. Mọi thiết bị đang đăng nhập sẽ nhận 401 ở lần refresh tiếp theo và phải đăng nhập lại.
 - Email đặt lại mật khẩu có tiêu đề riêng *"Mã đặt lại mật khẩu Courtly"* và nhắc *"nếu không phải bạn yêu cầu, hãy bỏ qua email này"*. Mã OTP không bao giờ được ghi ra log.
 
-> Đánh đổi đã biết: lỗi 429 (gửi quá nhanh) chỉ xảy ra với email có thật, vì giới hạn gửi được tính theo bản ghi OTP. Đây là lựa chọn có chủ ý, để chống spam hộp thư của người dùng thật.
+> Lỗi 429 (gửi quá nhanh / quá nhiều) **chỉ còn ở `/api/auth/register/send-otp`**. Endpoint đăng ký vốn đã trả 409 cho email đã có tài khoản (cần cho UX đăng ký), nên giữ 429 ở đó không làm lộ thêm thông tin gì, lại giúp người dùng biết phải chờ bao lâu.
 
 Ví dụ:
 
@@ -174,3 +176,4 @@ Quy tắc an toàn:
 - Số điện thoại nhận dạng `0xxxxxxxxx` hoặc `+84xxxxxxxxx` và được lưu dạng `0xxxxxxxxx`. Email được lưu dạng chữ thường.
 - Sau khi đặt lại mật khẩu, refresh token đang lưu trong app không còn dùng được (401): hãy xóa token và chuyển về màn hình đăng nhập.
 - Màn hình quên mật khẩu nên dùng `resendAfter` cho nút "Gửi lại mã", giống màn hình đăng ký.
+- **Flutter không còn nhận 429 ở `/password/forgot`; UI nên tự khoá nút Gửi lại theo đếm ngược cooldown phía client** (dùng `resendAfter` trong response). Bấm gửi lại sớm hơn vẫn nhận 200 nhưng backend sẽ không gửi mã mới.
