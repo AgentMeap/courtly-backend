@@ -14,6 +14,10 @@ Mặc định tính năng này **TẮT** (`firebase.enabled=false`) và `POST /a
 
 > Backend chỉ chấp nhận token có email **đã xác minh** (`email_verified = true`), để không ai chiếm được tài khoản LOCAL bằng một email chưa xác minh.
 
+> App Flutter hiện dùng project Firebase **`caulong-9b67e`**. Backend phải dùng service account và `FIREBASE_PROJECT_ID` của **đúng project trong `google-services.json` của app**; khác project thì mọi ID token đều bị từ chối (401).
+>
+> Chưa có Firebase mà cần demo? Dùng [Google mock cho dev](AUTH_BACKEND.md#google-mock-cho-dev) (`GOOGLE_MOCK_ENABLED=true`). Không bật mock cùng lúc với Firebase: app sẽ không khởi động.
+
 ## Bước 1: Tạo project Firebase (nếu chưa có)
 
 1. Vào https://console.firebase.google.com, chọn **Add project**, rồi đặt tên (ví dụ `courtly`).
@@ -48,6 +52,20 @@ IntelliJ: mở **Run > Edit Configurations > Environment variables** và thêm b
 | `FIREBASE_PROJECT_ID` | Project ID của Firebase |
 | `FIREBASE_SERVICE_ACCOUNT_PATH` | Đường dẫn tuyệt đối tới file JSON ở Bước 2 |
 
+### Chạy bằng Docker
+
+1. Đặt file JSON ở Bước 2 vào thư mục `secrets/` của repo, đổi tên thành `secrets/service-account.json`. Thư mục này đã nằm trong `.gitignore` **và** `.dockerignore`, nên không bị commit và không bị build vào image. `docker-compose.yml` mount nó **chỉ đọc** vào `/run/secrets/firebase` trong container.
+2. Trong `.env` (đường dẫn là đường dẫn **trong container**):
+   ```
+   FIREBASE_ENABLED=true
+   FIREBASE_PROJECT_ID=caulong-9b67e
+   FIREBASE_SERVICE_ACCOUNT_PATH=/run/secrets/firebase/service-account.json
+   GOOGLE_MOCK_ENABLED=false
+   ```
+3. `docker compose up -d --build app`, rồi xem log bằng `docker compose logs -f app`.
+
+> `.env` cũng được app đọc khi chạy `./mvnw` trên máy. Khi đó `/run/secrets/...` không tồn tại, nên hãy đặt `FIREBASE_SERVICE_ACCOUNT_PATH` bằng biến môi trường thật (IntelliJ/PowerShell) trỏ tới file trên máy, vì biến môi trường thật được ưu tiên hơn `.env`. Trên Linux, nếu container báo không đọc được file thì cấp quyền đọc: `chmod 644 secrets/service-account.json`.
+
 ## Bước 4: Khởi động và kiểm tra
 
 1. Chạy backend. Log sẽ có dòng `Firebase Admin SDK da khoi tao cho project courtly-ab12c`.
@@ -70,5 +88,5 @@ curl -X POST http://localhost:8080/api/auth/google \
 ## Ghi chú
 
 - Phải gửi **Firebase ID token**, không phải Google OAuth `idToken`/`accessToken` từ `google_sign_in`. Hãy đăng nhập vào Firebase trước rồi mới gọi `getIdToken()`.
-- Có thể chuyển sang `verifyIdToken(idToken, true)` để kiểm tra cả token đã bị thu hồi (xem TODO trong `GoogleAuthService`).
+- Có thể chuyển sang `verifyIdToken(idToken, true)` để kiểm tra cả token đã bị thu hồi (xem TODO trong `FirebaseGoogleIdentityVerifier`).
 - Khi deploy, đặt các biến trên ở server (`SPRING_PROFILES_ACTIVE=prod`) và không đóng gói file JSON vào jar.

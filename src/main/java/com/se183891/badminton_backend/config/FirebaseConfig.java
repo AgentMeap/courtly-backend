@@ -1,5 +1,6 @@
 package com.se183891.badminton_backend.config;
 
+import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
@@ -41,6 +42,9 @@ public class FirebaseConfig {
         try (InputStream in = Files.newInputStream(path)) {
             options = FirebaseOptions.builder().setCredentials(GoogleCredentials.fromStream(in));
         }
+        // Transport mac dinh cua firebase-admin (Apache HttpClient 5 async) loi "Not in GZIP format"
+        // voi httpclient5 5.6+ do Spring Boot quan ly: client da tu giai nen, SDK lai giai nen lan nua.
+        options.setHttpTransport(new NetHttpTransport());
         // TODO(FIREBASE): dat FIREBASE_PROJECT_ID (vd: courtly-xxxxx), trung voi project cua app Flutter
         if (StringUtils.hasText(properties.projectId())) {
             options.setProjectId(properties.projectId());

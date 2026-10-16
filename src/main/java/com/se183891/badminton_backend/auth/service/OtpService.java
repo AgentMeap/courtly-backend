@@ -18,6 +18,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -34,44 +35,48 @@ public class OtpService {
     private final EmailOtpRepository otpRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpMailSender mailSender;
+    private final AsyncOtpMailer asyncMailer;
     private final OtpProperties properties;
 
     /**
-     * Tao ma moi (vo hieu ma cu) va gui email. Gui that bai -> rollback, tra 503.
+     * Tao ma moi (vo hieu ma cu) va gui email. Bi gioi han tan suat -> 429. Gui that bai -> rollback, tra 503.
      */
     @Transactional
     public OtpSentResponse send(String email, OtpPurpose purpose) {
         LocalDateTime now = now();
-
-        otpRepository.findFirstByEmailAndPurposeOrderByCreatedAtDesc(email, purpose).ifPresent(last -> {
-            long waitSeconds = Duration.between(now, last.getCreatedAt().plus(properties.resendCooldown()))
-                    .toSeconds();
-            if (waitSeconds > 0) {
-                throw new ApiException(HttpStatus.TOO_MANY_REQUESTS,
-                        ErrorMessages.OTP_RESEND_WAIT.formatted(waitSeconds));
-            }
+        throttleMessage(email, purpose, now).ifPresent(message -> {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, message);
         });
-        if (otpRepository.countByEmailAndPurposeAndCreatedAtAfter(email, purpose, now.minusHours(1))
-                >= properties.maxSendsPerHour()) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, ErrorMessages.OTP_TOO_MANY_SENDS);
+
+        String code = createOtp(email, purpose, now);
+        deliver(email, purpose, code);
+
+        return sentResponse(ErrorMessages.OTP_SENT.formatted(email));
+    }
+
+    /**
+     * Nhu {@link #send} nhung KHONG bao loi khi bi gioi han tan suat: chi im lang bo qua (khong tao ma,
+     * khong gui mail). Dung cho luong khong duoc tiet lo email co ton tai hay khong (quen mat khau).
+     * Gioi han van co hieu luc that, nen khong the dung endpoint de spam hop thu nguoi khac.
+     * Mail duoc gui BAT DONG BO sau khi ma da commit: response khong phai cho SMTP, va loi gui mail
+     * chi duoc log (ma van ton tai, nguoi dung yeu cau ma moi sau cooldown).
+     *
+     * @return true neu da tao ma va len lich gui mail, false neu bi gioi han
+     */
+    @Transactional
+    public boolean sendIfAllowed(String email, OtpPurpose purpose) {
+        LocalDateTime now = now();
+        if (throttleMessage(email, purpose, now).isPresent()) {
+            return false;
         }
+        String code = createOtp(email, purpose, now);
+        asyncMailer.sendAfterCommit(email, purpose, code, properties.ttl());
+        return true;
+    }
 
-        otpRepository.invalidateActive(email, purpose);
-
-        String code = "%06d".formatted(SECURE_RANDOM.nextInt(1_000_000));
-        EmailOtp otp = new EmailOtp();
-        otp.setEmail(email);
-        otp.setPurpose(purpose);
-        otp.setCodeHash(passwordEncoder.encode(code));
-        otp.setExpiresAt(now.plus(properties.ttl()));
-        otp.setAttempts(0);
-        otp.setConsumed(false);
-        otpRepository.saveAndFlush(otp);
-
-        mailSender.sendRegistrationOtp(email, code, properties.ttl());
-
-        return new OtpSentResponse(ErrorMessages.OTP_SENT.formatted(email),
-                properties.ttl().toSeconds(), properties.resendCooldown().toSeconds());
+    /** Phan hoi "da gui ma" voi thoi han / thoi gian cho theo cau hinh. */
+    public OtpSentResponse sentResponse(String message) {
+        return new OtpSentResponse(message, properties.ttl().toSeconds(), properties.resendCooldown().toSeconds());
     }
 
     /**
@@ -109,6 +114,46 @@ public class OtpService {
     public void consume(UUID otpId) {
         if (otpRepository.consumeIfActive(otpId) == 0) {
             throw ApiException.badRequest(ErrorMessages.OTP_NOT_FOUND);
+        }
+    }
+
+    /** Thong bao loi neu dang trong thoi gian cho gui lai hoac da gui qua so lan cho phep trong 1 gio. */
+    private Optional<String> throttleMessage(String email, OtpPurpose purpose, LocalDateTime now) {
+        Optional<EmailOtp> last = otpRepository.findFirstByEmailAndPurposeOrderByCreatedAtDesc(email, purpose);
+        if (last.isPresent()) {
+            long waitSeconds = Duration.between(now, last.get().getCreatedAt().plus(properties.resendCooldown()))
+                    .toSeconds();
+            if (waitSeconds > 0) {
+                return Optional.of(ErrorMessages.OTP_RESEND_WAIT.formatted(waitSeconds));
+            }
+        }
+        if (otpRepository.countByEmailAndPurposeAndCreatedAtAfter(email, purpose, now.minusHours(1))
+                >= properties.maxSendsPerHour()) {
+            return Optional.of(ErrorMessages.OTP_TOO_MANY_SENDS);
+        }
+        return Optional.empty();
+    }
+
+    /** Vo hieu ma cu, luu BCrypt cua ma moi; tra ve ma tho (chi de gui mail, khong luu, khong log). */
+    private String createOtp(String email, OtpPurpose purpose, LocalDateTime now) {
+        otpRepository.invalidateActive(email, purpose);
+
+        String code = "%06d".formatted(SECURE_RANDOM.nextInt(1_000_000));
+        EmailOtp otp = new EmailOtp();
+        otp.setEmail(email);
+        otp.setPurpose(purpose);
+        otp.setCodeHash(passwordEncoder.encode(code));
+        otp.setExpiresAt(now.plus(properties.ttl()));
+        otp.setAttempts(0);
+        otp.setConsumed(false);
+        otpRepository.saveAndFlush(otp);
+        return code;
+    }
+
+    private void deliver(String email, OtpPurpose purpose, String code) {
+        switch (purpose) {
+            case REGISTER -> mailSender.sendRegistrationOtp(email, code, properties.ttl());
+            case RESET_PASSWORD -> mailSender.sendPasswordResetOtp(email, code, properties.ttl());
         }
     }
 

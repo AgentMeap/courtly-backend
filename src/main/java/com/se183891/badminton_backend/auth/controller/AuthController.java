@@ -1,14 +1,18 @@
 package com.se183891.badminton_backend.auth.controller;
 
 import com.se183891.badminton_backend.auth.dto.AuthResponse;
+import com.se183891.badminton_backend.auth.dto.ForgotPasswordRequest;
 import com.se183891.badminton_backend.auth.dto.GoogleLoginRequest;
 import com.se183891.badminton_backend.auth.dto.LoginRequest;
 import com.se183891.badminton_backend.auth.dto.OtpSentResponse;
 import com.se183891.badminton_backend.auth.dto.RefreshTokenRequest;
 import com.se183891.badminton_backend.auth.dto.RegisterRequest;
+import com.se183891.badminton_backend.auth.dto.ResetPasswordRequest;
 import com.se183891.badminton_backend.auth.dto.SendOtpRequest;
 import com.se183891.badminton_backend.auth.service.AuthService;
+import com.se183891.badminton_backend.auth.service.FirebaseRegistrationService;
 import com.se183891.badminton_backend.auth.service.GoogleAuthService;
+import com.se183891.badminton_backend.common.response.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,17 +28,26 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Dang ky, dang nhap, refresh, dang xuat")
+@Tag(name = "Auth", description = "Dang ky, dang nhap, quen mat khau, refresh, dang xuat")
 @SecurityRequirements // cac endpoint nay khong can Bearer token
 public class AuthController {
 
     private final AuthService authService;
     private final GoogleAuthService googleAuthService;
+    private final FirebaseRegistrationService firebaseRegistrationService;
 
     @PostMapping("/register/send-otp")
     @Operation(summary = "Buoc 1 dang ky: gui ma OTP 6 so toi email")
     public OtpSentResponse sendRegisterOtp(@Valid @RequestBody SendOtpRequest request) {
         return authService.sendRegisterOtp(request);
+    }
+
+    @PostMapping("/register/firebase")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Buoc 2 dang ky (Firebase): OTP dung thi backend tao user Firebase + ho so Firestore",
+            description = "503 neu firebase.enabled=false hoac Firebase loi; 409 neu email da co tai khoan.")
+    public MessageResponse registerFirebase(@Valid @RequestBody RegisterRequest request) {
+        return firebaseRegistrationService.register(request);
     }
 
     @PostMapping("/register")
@@ -48,6 +61,21 @@ public class AuthController {
     @Operation(summary = "Dang nhap bang email hoac so dien thoai")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/password/forgot")
+    @Operation(summary = "Quen mat khau buoc 1: gui OTP neu email da dang ky",
+            description = "Luon tra 200 voi cung mot body, ke ca khi email khong ton tai hoac bi gioi han tan suat "
+                    + "(cooldown, so lan gui/gio): khi do chi im lang khong gui mail. Endpoint nay KHONG tra 429. "
+                    + "503 neu he thong chua cau hinh SMTP.")
+    public OtpSentResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        return authService.forgotPassword(request);
+    }
+
+    @PostMapping("/password/reset")
+    @Operation(summary = "Quen mat khau buoc 2: dat mat khau moi bang OTP, thu hoi moi phien dang nhap")
+    public MessageResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return authService.resetPassword(request);
     }
 
     @PostMapping("/google")

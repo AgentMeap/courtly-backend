@@ -25,6 +25,11 @@ public final class ErrorMessages {
     public static final String GOOGLE_DISABLED = "Đăng nhập Google chưa được cấu hình";
     public static final String GOOGLE_TOKEN_INVALID = "Google ID token không hợp lệ hoặc đã hết hạn";
     public static final String GOOGLE_EMAIL_UNVERIFIED = "Email Google chưa được xác minh";
+    public static final String GOOGLE_EMAIL_USED_BY_OTHER_ACCOUNT = "Email đã được dùng bởi tài khoản khác";
+    public static final String REGISTER_SUCCESS = "Đăng ký thành công";
+    public static final String FIREBASE_DISABLED = "Đăng ký bằng Firebase chưa được bật trên máy chủ";
+    public static final String FIREBASE_UNAVAILABLE = "Không kết nối được Firebase, vui lòng thử lại sau";
+    public static final String LOGIN_TOO_MANY_ATTEMPTS = "Bạn đã đăng nhập sai quá nhiều lần, vui lòng thử lại sau";
     public static final String OTP_SENT = "Đã gửi mã OTP tới %s";
     public static final String OTP_NOT_FOUND = "Mã OTP không hợp lệ, vui lòng yêu cầu mã mới";
     public static final String OTP_EXPIRED = "Mã OTP đã hết hạn, vui lòng yêu cầu mã mới";
@@ -32,6 +37,11 @@ public final class ErrorMessages {
     public static final String OTP_TOO_MANY_ATTEMPTS = "Bạn đã nhập sai quá nhiều lần, vui lòng yêu cầu mã mới";
     public static final String OTP_RESEND_WAIT = "Vui lòng đợi %d giây trước khi yêu cầu mã mới";
     public static final String OTP_TOO_MANY_SENDS = "Bạn đã yêu cầu quá nhiều mã OTP, vui lòng thử lại sau 1 giờ";
+    // Quen mat khau: thong bao chung, khong tiet lo email co ton tai hay khong
+    public static final String PASSWORD_RESET_OTP_SENT =
+            "Nếu email đã đăng ký, mã OTP đặt lại mật khẩu đã được gửi tới email đó";
+    public static final String PASSWORD_RESET_OTP_INVALID = "Mã OTP không đúng hoặc đã hết hạn";
+    public static final String PASSWORD_RESET_SUCCESS = "Đặt lại mật khẩu thành công";
     public static final String MAIL_DISABLED = "Chức năng gửi email chưa được cấu hình";
     public static final String MAIL_SEND_FAILED = "Không gửi được email, vui lòng thử lại sau";
     public static final String INTERNAL_ERROR = "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau";

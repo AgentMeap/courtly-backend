@@ -54,11 +54,23 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Dat JWT_SECRET (>= 32 ky tu) trong .env}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
       SEED_ENABLED: ${SEED_ENABLED:-true}
       SHOW_SQL: ${SHOW_SQL:-false}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:*,http://127.0.0.1:*,http://10.0.2.2:*}
+      # Google sign-in that (Firebase). Dat file service account vao ./secrets/ (da gitignore + dockerignore),
+      # roi FIREBASE_SERVICE_ACCOUNT_PATH=/run/secrets/firebase/service-account.json (duong dan TRONG container)
       FIREBASE_ENABLED: ${FIREBASE_ENABLED:-false}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_SERVICE_ACCOUNT_PATH: ${FIREBASE_SERVICE_ACCOUNT_PATH:-}
+      FIREBASE_WEB_API_KEY: ${FIREBASE_WEB_API_KEY:-}
+      # Google mock CHI DUNG CHO DEV. App tu choi khoi dong neu bat cung SPRING_PROFILES_ACTIVE=prod
+      # hoac cung FIREBASE_ENABLED=true.
+      GOOGLE_MOCK_ENABLED: ${GOOGLE_MOCK_ENABLED:-false}
+    volumes:
+      # Thu muc chua file khoa Firebase, mount CHI DOC; khong bao gio COPY vao image
+      - ./secrets:/run/secrets/firebase:ro
     restart: unless-stopped
 
 volumes:

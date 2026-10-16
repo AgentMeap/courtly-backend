@@ -10,6 +10,7 @@ import org.springframework.util.StringUtils;
 /**
  * Kiem tra cac bien moi truong bat buoc NGAY khi khoi dong (truoc khi tao DataSource),
  * de bao loi ro rang thay vi loi ket noi SQL Server kho hieu.
+ * Dong thoi chan cau hinh Google mock nguy hiem (mock o prod, mock + Firebase).
  * Dang ky trong META-INF/spring.factories.
  */
 public class RequiredSecretsEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
@@ -36,6 +37,26 @@ public class RequiredSecretsEnvironmentPostProcessor implements EnvironmentPostP
                 && !StringUtils.hasText(environment.getProperty("JWT_SECRET"))) {
             throw new IllegalStateException(
                     "SPRING_PROFILES_ACTIVE=prod bat buoc phai dat bien moi truong JWT_SECRET (>= 32 byte)");
+        }
+
+        checkGoogleMock(environment);
+    }
+
+    /**
+     * Google mock chi danh cho dev: cam bat o prod, va cam bat cung Firebase (khong ro dung bo nao).
+     */
+    private static void checkGoogleMock(ConfigurableEnvironment environment) {
+        if (!environment.getProperty("app.google.mock-enabled", Boolean.class, false)) {
+            return;
+        }
+        if (environment.acceptsProfiles(Profiles.of("prod"))) {
+            throw new IllegalStateException(
+                    "GOOGLE_MOCK_ENABLED=true (app.google.mock-enabled) KHONG duoc phep khi SPRING_PROFILES_ACTIVE=prod."
+                            + " Mock Google login chi dung cho dev.");
+        }
+        if (environment.getProperty("firebase.enabled", Boolean.class, false)) {
+            throw new IllegalStateException(
+                    "Khong the bat dong thoi FIREBASE_ENABLED=true va GOOGLE_MOCK_ENABLED=true: hay tat mot trong hai.");
         }
     }
 
