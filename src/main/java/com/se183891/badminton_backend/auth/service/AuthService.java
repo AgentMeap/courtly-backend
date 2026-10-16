@@ -43,18 +43,24 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final OtpService otpService;
     private final OtpMailSender otpMailSender;
+    private final FirebaseRegistrationService firebaseRegistration;
+    private final FirebasePasswordLoginService firebasePasswordLogin;
     /** Hash gia de so sanh khi user khong ton tai, giu thoi gian phan hoi dong deu. */
     private final String dummyPasswordHash;
 
     public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                        JwtService jwtService, RefreshTokenService refreshTokenService,
-                       OtpService otpService, OtpMailSender otpMailSender) {
+                       OtpService otpService, OtpMailSender otpMailSender,
+                       FirebaseRegistrationService firebaseRegistration,
+                       FirebasePasswordLoginService firebasePasswordLogin) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
         this.otpService = otpService;
         this.otpMailSender = otpMailSender;
+        this.firebaseRegistration = firebaseRegistration;
+        this.firebasePasswordLogin = firebasePasswordLogin;
         this.dummyPasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
@@ -64,6 +70,8 @@ public class AuthService {
         if (userRepository.existsByEmail(email)) {
             throw ApiException.conflict(ErrorMessages.EMAIL_TAKEN);
         }
+        // Firebase bat: email da co tai khoan Firebase thi bao 409 ngay, khong gui OTP
+        firebaseRegistration.ensureEmailAvailable(email);
         return otpService.send(email, OtpPurpose.REGISTER);
     }
 
@@ -107,13 +115,25 @@ public class AuthService {
         Optional<User> found = findByIdentifier(request.identifier());
         String hash = found.map(User::getPasswordHash).orElse(null);
 
+        // Khong co mat khau trong SQL (tai khoan dang ky qua Firebase): de Firebase kiem tra mat khau
+        if (hash == null && request.identifier().contains("@")) {
+            Optional<User> firebaseUser = firebasePasswordLogin.login(
+                    normalizeEmail(request.identifier()), request.password());
+            if (firebaseUser.isPresent()) {
+                return issueTokensIfEnabled(firebaseUser.get());
+            }
+        }
+
         // Luon chay BCrypt (ke ca khi khong co user) va tra cung mot thong bao,
         // de khong tiet lo email/SDT co ton tai hay khong.
         boolean matches = passwordMatches(request.password(), hash != null ? hash : dummyPasswordHash);
         if (found.isEmpty() || hash == null || !matches) {
             throw ApiException.unauthorized(ErrorMessages.BAD_CREDENTIALS);
         }
-        User user = found.get();
+        return issueTokensIfEnabled(found.get());
+    }
+
+    private AuthResponse issueTokensIfEnabled(User user) {
         if (!user.isEnabled()) {
             throw ApiException.unauthorized(ErrorMessages.ACCOUNT_DISABLED);
         }

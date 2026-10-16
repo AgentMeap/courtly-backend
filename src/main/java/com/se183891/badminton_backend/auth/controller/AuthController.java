@@ -10,6 +10,7 @@ import com.se183891.badminton_backend.auth.dto.RegisterRequest;
 import com.se183891.badminton_backend.auth.dto.ResetPasswordRequest;
 import com.se183891.badminton_backend.auth.dto.SendOtpRequest;
 import com.se183891.badminton_backend.auth.service.AuthService;
+import com.se183891.badminton_backend.auth.service.FirebaseRegistrationService;
 import com.se183891.badminton_backend.auth.service.GoogleAuthService;
 import com.se183891.badminton_backend.common.response.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,11 +34,20 @@ public class AuthController {
 
     private final AuthService authService;
     private final GoogleAuthService googleAuthService;
+    private final FirebaseRegistrationService firebaseRegistrationService;
 
     @PostMapping("/register/send-otp")
     @Operation(summary = "Buoc 1 dang ky: gui ma OTP 6 so toi email")
     public OtpSentResponse sendRegisterOtp(@Valid @RequestBody SendOtpRequest request) {
         return authService.sendRegisterOtp(request);
+    }
+
+    @PostMapping("/register/firebase")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Buoc 2 dang ky (Firebase): OTP dung thi backend tao user Firebase + ho so Firestore",
+            description = "503 neu firebase.enabled=false hoac Firebase loi; 409 neu email da co tai khoan.")
+    public MessageResponse registerFirebase(@Valid @RequestBody RegisterRequest request) {
+        return firebaseRegistrationService.register(request);
     }
 
     @PostMapping("/register")

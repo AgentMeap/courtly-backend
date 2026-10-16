@@ -9,6 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record FirebaseProperties(
         boolean enabled,
         String projectId,
-        String serviceAccountPath
+        String serviceAccountPath,
+        /** Web API key cua project (khong phai service account): dung de kiem tra mat khau khi /api/auth/login. */
+        String webApiKey
 ) {
 }

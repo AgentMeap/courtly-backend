@@ -26,6 +26,10 @@ public final class ErrorMessages {
     public static final String GOOGLE_TOKEN_INVALID = "Google ID token không hợp lệ hoặc đã hết hạn";
     public static final String GOOGLE_EMAIL_UNVERIFIED = "Email Google chưa được xác minh";
     public static final String GOOGLE_EMAIL_USED_BY_OTHER_ACCOUNT = "Email đã được dùng bởi tài khoản khác";
+    public static final String REGISTER_SUCCESS = "Đăng ký thành công";
+    public static final String FIREBASE_DISABLED = "Đăng ký bằng Firebase chưa được bật trên máy chủ";
+    public static final String FIREBASE_UNAVAILABLE = "Không kết nối được Firebase, vui lòng thử lại sau";
+    public static final String LOGIN_TOO_MANY_ATTEMPTS = "Bạn đã đăng nhập sai quá nhiều lần, vui lòng thử lại sau";
     public static final String OTP_SENT = "Đã gửi mã OTP tới %s";
     public static final String OTP_NOT_FOUND = "Mã OTP không hợp lệ, vui lòng yêu cầu mã mới";
     public static final String OTP_EXPIRED = "Mã OTP đã hết hạn, vui lòng yêu cầu mã mới";
